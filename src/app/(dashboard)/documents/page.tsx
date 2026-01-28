@@ -23,6 +23,7 @@ export default function DocumentsPage() {
         <TabsList>
           <TabsTrigger value="all">All Documents</TabsTrigger>
           <TabsTrigger value="pending_review">Needs Review</TabsTrigger>
+          <TabsTrigger value="processing">Processing</TabsTrigger>
           <TabsTrigger value="verified">Verified</TabsTrigger>
         </TabsList>
 
@@ -49,7 +50,21 @@ export default function DocumentsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DocumentList />
+              <DocumentList status="pending_review" />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="processing">
+          <Card>
+            <CardHeader>
+              <CardTitle>Processing</CardTitle>
+              <CardDescription>
+                Documents currently being processed by OCR and AI
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DocumentList status="processing" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -63,7 +78,7 @@ export default function DocumentsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DocumentList />
+              <DocumentList status="verified" />
             </CardContent>
           </Card>
         </TabsContent>

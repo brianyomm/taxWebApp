@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { inngest } from '@/lib/inngest/client';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,27 +70,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
     }
 
-    // Get the public URL (signed URL for private bucket)
-    const { data: urlData } = await supabase.storage
-      .from('documents')
-      .createSignedUrl(filePath, 60 * 60 * 24 * 365); // 1 year expiry
-
-    const fileUrl = urlData?.signedUrl || `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/documents/${filePath}`;
-
+    // Store the file path (not a signed URL) - we'll generate signed URLs on demand
     // Create document record
     const { data: document, error: docError } = await supabase
       .from('documents')
       .insert({
         client_id: clientId,
         organization_id: user.organization_id,
-        file_url: fileUrl,
+        file_url: filePath, // Store the path, not a signed URL
         file_name: file.name,
         file_size: file.size,
         mime_type: file.type,
         category: category || null,
         subcategory: subcategory || null,
         tax_year: taxYear ? parseInt(taxYear) : new Date().getFullYear(),
-        status: 'pending_review',
+        status: 'pending_ocr', // Initial status before processing
         uploaded_by: user.id,
       })
       .select()
@@ -111,6 +106,23 @@ export async function POST(request: NextRequest) {
       resource_id: document.id,
       details: { file_name: file.name, client_id: clientId, file_size: file.size },
     });
+
+    // Trigger document processing via Inngest
+    try {
+      await inngest.send({
+        name: 'document/uploaded',
+        data: {
+          documentId: document.id,
+          organizationId: user.organization_id,
+          fileUrl: filePath,
+          fileName: file.name,
+          mimeType: file.type,
+        },
+      });
+    } catch (inngestError) {
+      console.error('Failed to trigger document processing:', inngestError);
+      // Don't fail the upload if Inngest fails - document is still uploaded
+    }
 
     return NextResponse.json({ data: document }, { status: 201 });
   } catch (error) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useDocuments, useDeleteDocument } from '@/hooks/use-documents';
 import {
   Table,
@@ -18,23 +19,28 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, Download, Trash2, Eye, FileText } from 'lucide-react';
+import { MoreHorizontal, Trash2, Eye, FileText, RefreshCw } from 'lucide-react';
+import { DocumentViewer } from './document-viewer';
 import type { Document } from '@/types/database';
 
 const statusColors: Record<string, string> = {
   pending_upload: 'bg-gray-100 text-gray-800',
   pending_ocr: 'bg-yellow-100 text-yellow-800',
+  processing: 'bg-blue-100 text-blue-800',
   pending_review: 'bg-orange-100 text-orange-800',
   verified: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
+  error: 'bg-red-100 text-red-800',
 };
 
 const statusLabels: Record<string, string> = {
   pending_upload: 'Pending Upload',
-  pending_ocr: 'Processing OCR',
+  pending_ocr: 'Pending OCR',
+  processing: 'Processing',
   pending_review: 'Needs Review',
   verified: 'Verified',
   rejected: 'Rejected',
+  error: 'Error',
 };
 
 const categoryLabels: Record<string, string> = {
@@ -49,11 +55,23 @@ const categoryLabels: Record<string, string> = {
 
 interface DocumentListProps {
   clientId?: string;
+  status?: string;
 }
 
-export function DocumentList({ clientId }: DocumentListProps) {
-  const { data, isLoading, error } = useDocuments(clientId ? { client_id: clientId } : {});
+export function DocumentList({ clientId, status }: DocumentListProps) {
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+
+  const { data, isLoading, error } = useDocuments({
+    ...(clientId && { client_id: clientId }),
+    ...(status && status !== 'all' && { status }),
+  });
   const deleteDocument = useDeleteDocument();
+
+  const handleView = (doc: Document) => {
+    setSelectedDocument(doc);
+    setViewerOpen(true);
+  };
 
   const handleDelete = async (id: string, fileName: string) => {
     if (confirm(`Are you sure you want to delete "${fileName}"?`)) {
@@ -80,6 +98,7 @@ export function DocumentList({ clientId }: DocumentListProps) {
   }
 
   return (
+    <>
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -150,18 +169,16 @@ export function DocumentList({ clientId }: DocumentListProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
-                          <Eye className="mr-2 h-4 w-4" />
-                          View
-                        </a>
+                      <DropdownMenuItem onClick={() => handleView(doc)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View & Review
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a href={doc.file_url} download={doc.file_name}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download
-                        </a>
-                      </DropdownMenuItem>
+                      {doc.status === 'pending_review' && (
+                        <DropdownMenuItem onClick={() => handleView(doc)}>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Verify Document
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         onClick={() => handleDelete(doc.id, doc.file_name)}
                         className="text-red-600"
@@ -184,5 +201,12 @@ export function DocumentList({ clientId }: DocumentListProps) {
         </TableBody>
       </Table>
     </div>
+
+    <DocumentViewer
+      document={selectedDocument}
+      open={viewerOpen}
+      onOpenChange={setViewerOpen}
+    />
+    </>
   );
 }

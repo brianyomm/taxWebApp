@@ -2,7 +2,7 @@
 
 export type UserRole = 'admin' | 'cpa' | 'staff';
 export type ClientStatus = 'active' | 'pending' | 'completed' | 'archived';
-export type DocumentStatus = 'pending_upload' | 'pending_ocr' | 'pending_review' | 'verified' | 'rejected';
+export type DocumentStatus = 'pending_upload' | 'pending_ocr' | 'processing' | 'pending_review' | 'verified' | 'rejected' | 'error';
 export type TaskStatus = 'pending' | 'in_progress' | 'review' | 'completed';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 

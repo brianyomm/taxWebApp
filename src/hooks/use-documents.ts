@@ -82,6 +82,28 @@ async function deleteDocument(id: string): Promise<void> {
   }
 }
 
+// Get document signed URL
+async function getDocumentUrl(id: string): Promise<{ url: string; expiresIn: number }> {
+  const response = await fetch(`/api/documents/${id}/url`);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to get document URL');
+  }
+  const result = await response.json();
+  return result.data;
+}
+
+// Reprocess document
+async function reprocessDocument(id: string): Promise<void> {
+  const response = await fetch(`/api/documents/${id}/reprocess`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to reprocess document');
+  }
+}
+
 // Hooks
 export function useDocuments(params: DocumentsQueryParams = {}) {
   return useQuery({
@@ -122,6 +144,26 @@ export function useDeleteDocument() {
 
   return useMutation({
     mutationFn: deleteDocument,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    },
+  });
+}
+
+export function useDocumentUrl(documentId: string | null) {
+  return useQuery({
+    queryKey: ['document-url', documentId],
+    queryFn: () => getDocumentUrl(documentId!),
+    enabled: !!documentId,
+    staleTime: 1000 * 60 * 30, // 30 minutes (URL valid for 1 hour)
+  });
+}
+
+export function useReprocessDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: reprocessDocument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
