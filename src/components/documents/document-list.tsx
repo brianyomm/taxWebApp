@@ -127,7 +127,11 @@ export function DocumentList({ clientId, status }: DocumentListProps) {
             ))
           ) : data?.data && data.data.length > 0 ? (
             data.data.map((doc) => (
-              <TableRow key={doc.id}>
+              <TableRow
+                key={doc.id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleView(doc)}
+              >
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
@@ -161,7 +165,7 @@ export function DocumentList({ clientId, status }: DocumentListProps) {
                 <TableCell className="text-muted-foreground">
                   {new Date(doc.created_at).toLocaleDateString()}
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">

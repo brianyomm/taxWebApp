@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useCreateClient, useUpdateClient } from '@/hooks/use-clients';
+import { useUsers } from '@/hooks/use-users';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ const filingStatusOptions = [
 export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) {
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
+  const { data: usersData } = useUsers();
   const isEditing = !!client;
 
   const {
@@ -58,6 +60,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
       address: '',
       tax_year: new Date().getFullYear(),
       filing_status: undefined,
+      assigned_to: undefined,
       notes: '',
     },
   });
@@ -72,6 +75,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
         address: client.address || '',
         tax_year: client.tax_year,
         filing_status: client.filing_status,
+        assigned_to: client.assigned_to || undefined,
         notes: client.notes || '',
       });
     } else if (open) {
@@ -82,6 +86,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
         address: '',
         tax_year: new Date().getFullYear(),
         filing_status: undefined,
+        assigned_to: undefined,
         notes: '',
       });
     }
@@ -101,6 +106,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
   };
 
   const filingStatus = watch('filing_status');
+  const assignedTo = watch('assigned_to');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -184,6 +190,26 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="assigned_to">Assigned CPA</Label>
+              <Select
+                value={assignedTo || '_unassigned'}
+                onValueChange={(value) => setValue('assigned_to', value === '_unassigned' ? undefined : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a team member" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_unassigned">Unassigned</SelectItem>
+                  {usersData?.data?.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} ({user.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">

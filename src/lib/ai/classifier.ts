@@ -33,6 +33,14 @@ export interface ExtractedField {
   confidence: number;
 }
 
+// Helper to strip markdown code blocks from Claude's response
+function stripMarkdownCodeBlocks(text: string): string {
+  // Remove ```json ... ``` or ``` ... ``` wrapper
+  const codeBlockRegex = /^```(?:json)?\s*\n?([\s\S]*?)\n?```$/;
+  const match = text.trim().match(codeBlockRegex);
+  return match ? match[1].trim() : text.trim();
+}
+
 const CLASSIFICATION_PROMPT = `You are a tax document classifier for a CPA firm. Analyze the following document text and classify it into the appropriate category and subcategory.
 
 Available categories and subcategories:
@@ -95,9 +103,10 @@ export async function classifyDocument(ocrText: string): Promise<ClassificationR
     throw new Error('No text response from Claude');
   }
 
-  // Parse the JSON response
+  // Parse the JSON response (strip markdown code blocks if present)
   try {
-    const result = JSON.parse(textBlock.text) as ClassificationResult;
+    const cleanedText = stripMarkdownCodeBlocks(textBlock.text);
+    const result = JSON.parse(cleanedText) as ClassificationResult;
 
     // Validate the category
     if (!Object.keys(DOCUMENT_CATEGORIES).includes(result.category)) {
@@ -156,7 +165,8 @@ Respond ONLY with valid JSON.`;
   }
 
   try {
-    return JSON.parse(textBlock.text);
+    const cleanedText = stripMarkdownCodeBlocks(textBlock.text);
+    return JSON.parse(cleanedText);
   } catch (error) {
     console.error('Failed to parse extraction response:', textBlock.text);
     return { error: 'Failed to extract data', rawText: ocrText.substring(0, 500) };

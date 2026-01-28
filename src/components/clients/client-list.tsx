@@ -22,6 +22,7 @@ import {
 import { MoreHorizontal, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { Client } from '@/types/database';
 
 const statusColors: Record<string, string> = {
@@ -36,6 +37,7 @@ interface ClientListProps {
 }
 
 export function ClientList({ onEdit }: ClientListProps) {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -110,14 +112,13 @@ export function ClientList({ onEdit }: ClientListProps) {
               ))
             ) : data?.data && data.data.length > 0 ? (
               data.data.map((client) => (
-                <TableRow key={client.id}>
+                <TableRow
+                  key={client.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => router.push(`/clients/${client.id}`)}
+                >
                   <TableCell className="font-medium">
-                    <Link
-                      href={`/clients/${client.id}`}
-                      className="hover:underline"
-                    >
-                      {client.name}
-                    </Link>
+                    {client.name}
                   </TableCell>
                   <TableCell>{client.email || '-'}</TableCell>
                   <TableCell>{client.tax_year}</TableCell>
@@ -129,7 +130,7 @@ export function ClientList({ onEdit }: ClientListProps) {
                   <TableCell>
                     {(client as Client & { assigned_user?: { name: string } }).assigned_user?.name || '-'}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">

@@ -139,11 +139,22 @@ export function DocumentViewer({ document, open, onOpenChange }: DocumentViewerP
   const status = statusConfig[document.status] || statusConfig.pending_review;
   const extractedData = document.extracted_data as Record<string, unknown> | null;
   const classification = extractedData?.classification as Record<string, unknown> | null;
-  const extractedFields = (extractedData?.extractedFields || classification?.extractedFields) as Array<{
-    fieldName: string;
-    value: string;
-    confidence: number;
-  }> | null;
+
+  // Handle both array format and flat object format for extracted fields
+  const rawExtractedFields = extractedData?.extractedFields || classification?.extractedFields;
+  const extractedFields: Array<{ fieldName: string; value: string; confidence: number }> | null =
+    rawExtractedFields
+      ? Array.isArray(rawExtractedFields)
+        ? rawExtractedFields as Array<{ fieldName: string; value: string; confidence: number }>
+        : // Convert flat object to array format
+          Object.entries(rawExtractedFields as Record<string, unknown>)
+            .filter(([key]) => key !== 'confidence' && key !== 'error' && key !== 'rawText')
+            .map(([key, value]) => ({
+              fieldName: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+              value: String(value),
+              confidence: (rawExtractedFields as Record<string, unknown>).confidence as number || 0,
+            }))
+      : null;
 
   const handleVerify = async () => {
     try {
@@ -186,7 +197,7 @@ export function DocumentViewer({ document, open, onOpenChange }: DocumentViewerP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[90vh]">
+      <DialogContent className="max-w-6xl w-[95vw] h-[90vh]">
         <DialogHeader>
           <div className="flex items-start justify-between">
             <div>

@@ -8,7 +8,6 @@ import { useClientTasks } from '@/hooks/use-tasks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClientDialog } from '@/components/clients/client-dialog';
 import { UploadDialog } from '@/components/documents/upload-dialog';
@@ -155,8 +154,8 @@ export default function ClientDetailPage() {
         </div>
       </div>
 
+      {/* Client Info Card */}
       <div className="grid gap-6 md:grid-cols-3">
-        {/* Client Info Card */}
         <Card>
           <CardHeader>
             <CardTitle>Client Information</CardTitle>
@@ -203,88 +202,76 @@ export default function ClientDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Tabs for Documents and Tasks */}
-        <div className="md:col-span-2">
-          <Tabs defaultValue="documents">
-            <TabsList>
-              <TabsTrigger value="documents">
-                <FileText className="mr-2 h-4 w-4" />
-                Documents
-              </TabsTrigger>
-              <TabsTrigger value="tasks">
-                <CheckSquare className="mr-2 h-4 w-4" />
+        {/* Tasks Card */}
+        <Card className="md:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CheckSquare className="h-5 w-5" />
                 Tasks
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="documents" className="mt-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Documents</CardTitle>
-                    <CardDescription>
-                      Tax documents uploaded for this client
-                    </CardDescription>
-                  </div>
-                  <Button onClick={() => setUploadDialogOpen(true)}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {hasDocuments ? (
-                    <DocumentList clientId={clientId} />
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No documents uploaded yet</p>
-                      <Button
-                        variant="outline"
-                        className="mt-4"
-                        onClick={() => setUploadDialogOpen(true)}
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Documents
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="tasks" className="mt-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Tasks</CardTitle>
-                    <CardDescription>
-                      Tasks related to this client
-                    </CardDescription>
-                  </div>
-                  <Button onClick={handleNewTask}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Task
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {hasTasks ? (
-                    <TaskList clientId={clientId} onEdit={handleEditTask} />
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <CheckSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No tasks created yet</p>
-                      <Button variant="outline" className="mt-4" onClick={handleNewTask}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Task
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
+              </CardTitle>
+              <CardDescription>
+                Tasks related to this client
+              </CardDescription>
+            </div>
+            <Button onClick={handleNewTask}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Task
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {hasTasks ? (
+              <TaskList clientId={clientId} onEdit={handleEditTask} />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No tasks created yet</p>
+                <Button variant="outline" className="mt-4" onClick={handleNewTask}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Task
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Documents Section - Full Width */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Documents
+            </CardTitle>
+            <CardDescription>
+              Tax documents uploaded for this client
+            </CardDescription>
+          </div>
+          <Button onClick={() => setUploadDialogOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {hasDocuments ? (
+            <DocumentList clientId={clientId} />
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No documents uploaded yet</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setUploadDialogOpen(true)}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Upload Documents
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Dialogs */}
       <ClientDialog
