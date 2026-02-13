@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { updateClientSchema, uuidSchema } from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +20,10 @@ export async function GET(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid client id' }, { status: 400 });
+    }
 
     // Get the user's organization
     const { data: user, error: userError } = await supabase
@@ -34,7 +39,7 @@ export async function GET(
     const { data: client, error } = await supabase
       .from('clients')
       .select('*, assigned_user:users!clients_assigned_to_fkey(id, name, email)')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -62,6 +67,10 @@ export async function PUT(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid client id' }, { status: 400 });
+    }
 
     // Get the user's organization
     const { data: user, error: userError } = await supabase
@@ -75,13 +84,19 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, email, phone, address, tax_year, filing_status, status, assigned_to, notes } = body;
+    const parsedBody = updateClientSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
+    }
+    const updateData = Object.fromEntries(
+      Object.entries(parsedBody.data).filter(([, value]) => value !== undefined)
+    );
 
     // Verify the client belongs to the user's organization
     const { data: existingClient, error: checkError } = await supabase
       .from('clients')
       .select('id')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -91,18 +106,8 @@ export async function PUT(
 
     const { data: client, error } = await supabase
       .from('clients')
-      .update({
-        name,
-        email,
-        phone,
-        address,
-        tax_year,
-        filing_status,
-        status,
-        assigned_to,
-        notes,
-      })
-      .eq('id', id)
+      .update(updateData)
+      .eq('id', idResult.data)
       .select()
       .single();
 
@@ -117,8 +122,8 @@ export async function PUT(
       user_id: user.id,
       action: 'update',
       resource_type: 'client',
-      resource_id: id,
-      details: { name },
+      resource_id: idResult.data,
+      details: updateData,
     });
 
     return NextResponse.json({ data: client });
@@ -140,6 +145,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid client id' }, { status: 400 });
+    }
 
     // Get the user's organization
     const { data: user, error: userError } = await supabase
@@ -161,14 +170,14 @@ export async function DELETE(
     const { data: client } = await supabase
       .from('clients')
       .select('name')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
     const { error } = await supabase
       .from('clients')
       .delete()
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id);
 
     if (error) {
@@ -182,7 +191,7 @@ export async function DELETE(
       user_id: user.id,
       action: 'delete',
       resource_type: 'client',
-      resource_id: id,
+      resource_id: idResult.data,
       details: { name: client?.name },
     });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useCreateClient, useUpdateClient } from '@/hooks/use-clients';
 import { useUsers } from '@/hooks/use-users';
 import {
@@ -50,7 +50,7 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<CreateClientInput>({
     defaultValues: {
@@ -105,8 +105,8 @@ export function ClientDialog({ open, onOpenChange, client }: ClientDialogProps) 
     }
   };
 
-  const filingStatus = watch('filing_status');
-  const assignedTo = watch('assigned_to');
+  const filingStatus = useWatch({ control, name: 'filing_status' });
+  const assignedTo = useWatch({ control, name: 'assigned_to' });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

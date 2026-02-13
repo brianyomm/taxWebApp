@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { updateTaskSchema, uuidSchema } from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +20,10 @@ export async function GET(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid task id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -33,7 +38,7 @@ export async function GET(
     const { data: task, error } = await supabase
       .from('tasks')
       .select('*, client:clients(id, name), assigned_user:users!tasks_assigned_to_fkey(id, name)')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -60,6 +65,10 @@ export async function PUT(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid task id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -72,13 +81,20 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { title, description, client_id, status, priority, assigned_to, due_date } = body;
+    const parsedBody = updateTaskSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
+    }
+    const { status } = parsedBody.data;
+    const updateData: Record<string, unknown> = Object.fromEntries(
+      Object.entries(parsedBody.data).filter(([, value]) => value !== undefined)
+    );
 
     // Check if task belongs to organization
     const { data: existingTask } = await supabase
       .from('tasks')
       .select('id, status')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -86,27 +102,17 @@ export async function PUT(
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
-    // Update completed_at if status changed to completed
-    const updateData: Record<string, unknown> = {
-      title,
-      description,
-      client_id,
-      status,
-      priority,
-      assigned_to,
-      due_date,
-    };
-
+    // Update completed_at if status changed to completed.
     if (status === 'completed' && existingTask.status !== 'completed') {
       updateData.completed_at = new Date().toISOString();
-    } else if (status !== 'completed') {
+    } else if (status !== undefined && status !== 'completed') {
       updateData.completed_at = null;
     }
 
     const { data: task, error } = await supabase
       .from('tasks')
       .update(updateData)
-      .eq('id', id)
+      .eq('id', idResult.data)
       .select()
       .single();
 
@@ -121,8 +127,8 @@ export async function PUT(
       user_id: user.id,
       action: 'update',
       resource_type: 'task',
-      resource_id: id,
-      details: { title, status },
+      resource_id: idResult.data,
+      details: updateData,
     });
 
     return NextResponse.json({ data: task });
@@ -144,6 +150,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid task id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -158,14 +168,14 @@ export async function DELETE(
     const { data: task } = await supabase
       .from('tasks')
       .select('title')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
     const { error } = await supabase
       .from('tasks')
       .delete()
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id);
 
     if (error) {
@@ -179,7 +189,7 @@ export async function DELETE(
       user_id: user.id,
       action: 'delete',
       resource_type: 'task',
-      resource_id: id,
+      resource_id: idResult.data,
       details: { title: task?.title },
     });
 

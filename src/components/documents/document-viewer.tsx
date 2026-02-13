@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import {
   Dialog,
   DialogContent,
@@ -254,9 +255,12 @@ export function DocumentViewer({ document, open, onOpenChange }: DocumentViewerP
                     </div>
                     {document.mime_type?.startsWith('image/') ? (
                       <div className="flex-1 flex items-center justify-center p-4 bg-muted/50">
-                        <img
+                        <Image
                           src={urlData.url}
                           alt={document.file_name}
+                          width={1200}
+                          height={1600}
+                          unoptimized
                           className="max-h-full max-w-full object-contain"
                         />
                       </div>

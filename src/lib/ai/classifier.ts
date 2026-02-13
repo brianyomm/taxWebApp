@@ -115,7 +115,7 @@ export async function classifyDocument(ocrText: string): Promise<ClassificationR
     }
 
     return result;
-  } catch (error) {
+  } catch {
     console.error('Failed to parse Claude response:', textBlock.text);
     throw new Error('Failed to parse classification result');
   }
@@ -167,7 +167,7 @@ Respond ONLY with valid JSON.`;
   try {
     const cleanedText = stripMarkdownCodeBlocks(textBlock.text);
     return JSON.parse(cleanedText);
-  } catch (error) {
+  } catch {
     console.error('Failed to parse extraction response:', textBlock.text);
     return { error: 'Failed to extract data', rawText: ocrText.substring(0, 500) };
   }

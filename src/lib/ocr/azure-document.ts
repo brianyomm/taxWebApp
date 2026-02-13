@@ -91,7 +91,7 @@ export async function analyzeTaxDocument(
     const poller = await client.beginAnalyzeDocumentFromUrl(modelId, documentUrl);
     const result = await poller.pollUntilDone();
     return transformResult(result);
-  } catch (error) {
+  } catch {
     // Fall back to general document analysis if specific model fails
     console.warn(`Failed to analyze with ${modelId}, falling back to prebuilt-document`);
     const poller = await client.beginAnalyzeDocumentFromUrl('prebuilt-document', documentUrl);

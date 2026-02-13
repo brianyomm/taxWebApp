@@ -2,6 +2,12 @@ import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { inngest } from '@/lib/inngest/client';
+import {
+  documentCategorySchema,
+  sanitizeFileName,
+  uuidSchema,
+  validateUploadFile,
+} from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,11 +46,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const fileValidation = validateUploadFile(file);
+    if (!fileValidation.success) {
+      return NextResponse.json({ error: fileValidation.error }, { status: 400 });
+    }
+
+    const clientIdResult = uuidSchema.safeParse(clientId);
+    if (!clientIdResult.success) {
+      return NextResponse.json({ error: 'Invalid client_id' }, { status: 400 });
+    }
+
+    if (category) {
+      const categoryResult = documentCategorySchema.safeParse(category);
+      if (!categoryResult.success) {
+        return NextResponse.json({ error: 'Invalid document category' }, { status: 400 });
+      }
+    }
+
+    const normalizedSubcategory = subcategory?.trim() || null;
+    if (normalizedSubcategory && normalizedSubcategory.length > 50) {
+      return NextResponse.json({ error: 'Subcategory must be 50 characters or fewer' }, { status: 400 });
+    }
+
+    let normalizedTaxYear: number | null = null;
+    if (taxYear) {
+      const parsedTaxYear = Number.parseInt(taxYear, 10);
+      if (!Number.isInteger(parsedTaxYear) || parsedTaxYear < 2000 || parsedTaxYear > 2100) {
+        return NextResponse.json({ error: 'Invalid tax year' }, { status: 400 });
+      }
+      normalizedTaxYear = parsedTaxYear;
+    }
+
     // Verify client belongs to organization
     const { data: client } = await supabase
       .from('clients')
       .select('id')
-      .eq('id', clientId)
+      .eq('id', clientIdResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -53,12 +90,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate unique file path
-    const fileExt = file.name.split('.').pop();
     const timestamp = Date.now();
-    const filePath = `${user.organization_id}/${clientId}/${timestamp}-${file.name}`;
+    const safeFileName = sanitizeFileName(file.name);
+    const filePath = `${user.organization_id}/${clientIdResult.data}/${timestamp}-${safeFileName}`;
 
     // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('documents')
       .upload(filePath, file, {
         contentType: file.type,
@@ -75,16 +112,16 @@ export async function POST(request: NextRequest) {
     const { data: document, error: docError } = await supabase
       .from('documents')
       .insert({
-        client_id: clientId,
+        client_id: clientIdResult.data,
         organization_id: user.organization_id,
-        file_url: filePath, // Store the path, not a signed URL
-        file_name: file.name,
+        file_url: filePath,
+        file_name: safeFileName,
         file_size: file.size,
-        mime_type: file.type,
+        mime_type: file.type || 'application/octet-stream',
         category: category || null,
-        subcategory: subcategory || null,
-        tax_year: taxYear ? parseInt(taxYear) : new Date().getFullYear(),
-        status: 'pending_ocr', // Initial status before processing
+        subcategory: normalizedSubcategory,
+        tax_year: normalizedTaxYear || new Date().getFullYear(),
+        status: 'pending_ocr',
         uploaded_by: user.id,
       })
       .select()
@@ -104,7 +141,7 @@ export async function POST(request: NextRequest) {
       action: 'upload',
       resource_type: 'document',
       resource_id: document.id,
-      details: { file_name: file.name, client_id: clientId, file_size: file.size },
+      details: { file_name: safeFileName, client_id: clientIdResult.data, file_size: file.size },
     });
 
     // Trigger document processing via Inngest
@@ -115,7 +152,7 @@ export async function POST(request: NextRequest) {
           documentId: document.id,
           organizationId: user.organization_id,
           fileUrl: filePath,
-          fileName: file.name,
+          fileName: safeFileName,
           mimeType: file.type,
         },
       });

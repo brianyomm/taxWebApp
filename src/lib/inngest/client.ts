@@ -28,7 +28,25 @@ export type DocumentProcessedEvent = {
   };
 };
 
+export type DocumentReprocessEvent = {
+  name: 'document/reprocess';
+  data: {
+    documentId: string;
+    organizationId: string;
+  };
+};
+
+export type DocumentsBulkProcessEvent = {
+  name: 'documents/bulk-process';
+  data: {
+    documentIds: string[];
+    organizationId: string;
+  };
+};
+
 export type Events = {
   'document/uploaded': DocumentUploadedEvent;
   'document/processed': DocumentProcessedEvent;
+  'document/reprocess': DocumentReprocessEvent;
+  'documents/bulk-process': DocumentsBulkProcessEvent;
 };

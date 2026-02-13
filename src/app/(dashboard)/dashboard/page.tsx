@@ -23,7 +23,7 @@ const actionLabels: Record<string, string> = {
 };
 
 export default function DashboardPage() {
-  const { data, isLoading, error } = useDashboardStats();
+  const { data, isLoading } = useDashboardStats();
   const stats = data?.data;
 
   return (

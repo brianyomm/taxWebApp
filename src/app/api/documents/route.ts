@@ -1,6 +1,13 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  createDocumentSchema,
+  documentCategorySchema,
+  documentStatusSchema,
+  parsePagination,
+  uuidSchema,
+} from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,8 +36,11 @@ export async function GET(request: NextRequest) {
     const clientId = searchParams.get('client_id');
     const status = searchParams.get('status');
     const category = searchParams.get('category');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const paginationResult = parsePagination(searchParams);
+    if (!paginationResult.success) {
+      return NextResponse.json({ error: paginationResult.error.issues[0]?.message || 'Invalid pagination values' }, { status: 400 });
+    }
+    const { limit, offset } = paginationResult.data;
 
     let query = supabase
       .from('documents')
@@ -40,15 +50,27 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (clientId) {
-      query = query.eq('client_id', clientId);
+      const clientIdResult = uuidSchema.safeParse(clientId);
+      if (!clientIdResult.success) {
+        return NextResponse.json({ error: 'Invalid client_id filter' }, { status: 400 });
+      }
+      query = query.eq('client_id', clientIdResult.data);
     }
 
     if (status && status !== 'all') {
-      query = query.eq('status', status);
+      const statusResult = documentStatusSchema.safeParse(status);
+      if (!statusResult.success) {
+        return NextResponse.json({ error: 'Invalid status filter' }, { status: 400 });
+      }
+      query = query.eq('status', statusResult.data);
     }
 
     if (category && category !== 'all') {
-      query = query.eq('category', category);
+      const categoryResult = documentCategorySchema.safeParse(category);
+      if (!categoryResult.success) {
+        return NextResponse.json({ error: 'Invalid category filter' }, { status: 400 });
+      }
+      query = query.eq('category', categoryResult.data);
     }
 
     const { data: documents, error, count } = await query;
@@ -89,6 +111,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const parsedBody = createDocumentSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
+    }
     const {
       client_id,
       file_url,
@@ -98,14 +124,7 @@ export async function POST(request: NextRequest) {
       category,
       subcategory,
       tax_year,
-    } = body;
-
-    if (!client_id || !file_url || !file_name) {
-      return NextResponse.json(
-        { error: 'client_id, file_url, and file_name are required' },
-        { status: 400 }
-      );
-    }
+    } = parsedBody.data;
 
     // Verify client belongs to organization
     const { data: client } = await supabase

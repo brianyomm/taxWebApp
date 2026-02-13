@@ -36,7 +36,7 @@ export async function POST() {
       });
     }
 
-    // Create a new organization for this user
+    // Create (or reuse) a deterministic organization for this user.
     const orgName = user.firstName
       ? `${user.firstName}'s Organization`
       : 'My Organization';
@@ -45,11 +45,11 @@ export async function POST() {
 
     const { data: organization, error: orgError } = await supabase
       .from('organizations')
-      .insert({
+      .upsert({
         name: orgName,
         slug: orgSlug,
         subscription_tier: 'free',
-      })
+      }, { onConflict: 'slug' })
       .select()
       .single();
 
@@ -58,7 +58,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Failed to create organization' }, { status: 500 });
     }
 
-    // Create the user record
+    // Create user record. If another request won the race, fetch and return it.
     const { data: newUser, error: userError } = await supabase
       .from('users')
       .insert({
@@ -74,9 +74,22 @@ export async function POST() {
       .single();
 
     if (userError) {
+      if ((userError as { code?: string }).code === '23505') {
+        const { data: racedUser, error: racedUserError } = await supabase
+          .from('users')
+          .select('id, organization_id')
+          .eq('clerk_id', userId)
+          .single();
+
+        if (!racedUserError && racedUser) {
+          return NextResponse.json({
+            data: racedUser,
+            message: 'User already synced',
+          });
+        }
+      }
+
       console.error('Error creating user:', userError);
-      // Rollback organization creation
-      await supabase.from('organizations').delete().eq('id', organization.id);
       return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
     }
 
