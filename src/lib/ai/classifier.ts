@@ -57,7 +57,7 @@ For each document, provide:
 2. The subcategory (one of the subcategories for that category)
 3. Confidence score (0-100)
 4. Tax year if identifiable
-5. Key extracted fields relevant to tax preparation
+5. Key extracted fields relevant to tax preparation — IMPORTANT: always include the actual dollar amounts, values, and numbers from the form boxes
 6. A brief summary of the document
 
 Respond ONLY with valid JSON in this exact format:
@@ -72,10 +72,42 @@ Respond ONLY with valid JSON in this exact format:
   "summary": "string"
 }
 
-Document text to classify:
 `;
 
-export async function classifyDocument(ocrText: string): Promise<ClassificationResult> {
+export interface StructuredOCRData {
+  keyValuePairs?: Array<{ key: string; value: string; confidence: number }>;
+  tables?: Array<{ rowCount: number; columnCount: number; cells: Array<{ rowIndex: number; columnIndex: number; content: string }> }>;
+}
+
+function formatOCRContext(ocrText: string, structuredData?: StructuredOCRData): string {
+  let context = `Document text:\n${ocrText}`;
+
+  if (structuredData?.keyValuePairs?.length) {
+    context += '\n\nExtracted key-value pairs from form:\n';
+    context += structuredData.keyValuePairs
+      .map(kv => `  ${kv.key}: ${kv.value}`)
+      .join('\n');
+  }
+
+  if (structuredData?.tables?.length) {
+    context += '\n\nExtracted tables:\n';
+    for (const table of structuredData.tables) {
+      const grid: string[][] = Array.from({ length: table.rowCount }, () =>
+        Array(table.columnCount).fill('')
+      );
+      for (const cell of table.cells) {
+        if (cell.rowIndex < table.rowCount && cell.columnIndex < table.columnCount) {
+          grid[cell.rowIndex][cell.columnIndex] = cell.content;
+        }
+      }
+      context += grid.map(row => row.join(' | ')).join('\n') + '\n';
+    }
+  }
+
+  return context;
+}
+
+export async function classifyDocument(ocrText: string, structuredData?: StructuredOCRData): Promise<ClassificationResult> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('Anthropic API key not configured');
   }
@@ -86,13 +118,15 @@ export async function classifyDocument(ocrText: string): Promise<ClassificationR
     ? ocrText.substring(0, maxLength) + '\n...[truncated]'
     : ocrText;
 
+  const documentContext = formatOCRContext(truncatedText, structuredData);
+
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 1024,
     messages: [
       {
         role: 'user',
-        content: CLASSIFICATION_PROMPT + truncatedText,
+        content: CLASSIFICATION_PROMPT + documentContext,
       },
     ],
   });
@@ -129,22 +163,26 @@ export function isAIConfigured(): boolean {
 // Extract specific tax form data using Claude
 export async function extractTaxFormData(
   ocrText: string,
-  formType: string
+  formType: string,
+  structuredData?: StructuredOCRData
 ): Promise<Record<string, unknown>> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('Anthropic API key not configured');
   }
+
+  const documentContext = formatOCRContext(ocrText, structuredData);
 
   const extractionPrompt = `You are a tax document data extractor. Extract all relevant fields from this ${formType} form.
 
 For ${formType}, extract fields like:
 ${getFormFieldsHint(formType)}
 
+IMPORTANT: You MUST extract the actual dollar amounts, numerical values, and identification numbers from the document. Do not leave values empty. Use the key-value pairs and tables provided below if the raw text is hard to parse.
+
 Return the extracted data as a JSON object with field names as keys and values as strings.
 Include a "confidence" field (0-100) indicating overall extraction confidence.
 
-Document text:
-${ocrText}
+${documentContext}
 
 Respond ONLY with valid JSON.`;
 

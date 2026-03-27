@@ -1,7 +1,7 @@
 import { inngest } from './client';
 import { createClient } from '@supabase/supabase-js';
 import { analyzeDocument, isOCRConfigured } from '../ocr/azure-document';
-import { classifyDocument, extractTaxFormData, isAIConfigured } from '../ai/classifier';
+import { classifyDocument, extractTaxFormData, isAIConfigured, type StructuredOCRData } from '../ai/classifier';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,12 +50,18 @@ export const processDocument = inngest.createFunction(
       });
     }
 
+    // Build structured OCR data to pass to AI for better extraction
+    const structuredOCRData: StructuredOCRData | undefined = ocrResult ? {
+      keyValuePairs: ocrResult.keyValuePairs,
+      tables: ocrResult.tables,
+    } : undefined;
+
     // Step 3: Run AI classification
     let classificationResult = null;
     if (isAIConfigured() && ocrResult?.text) {
       classificationResult = await step.run('classify-document', async () => {
         try {
-          const result = await classifyDocument(ocrResult.text);
+          const result = await classifyDocument(ocrResult.text, structuredOCRData);
           return result;
         } catch (error) {
           console.error('Classification failed:', error);
@@ -71,7 +77,7 @@ export const processDocument = inngest.createFunction(
         try {
           const formTypes = ['W-2', '1099-INT', '1099-DIV', '1098', '1099-MISC', '1099-NEC', 'K-1'];
           if (formTypes.includes(classificationResult.subcategory)) {
-            return await extractTaxFormData(ocrResult.text, classificationResult.subcategory);
+            return await extractTaxFormData(ocrResult.text, classificationResult.subcategory, structuredOCRData);
           }
           return classificationResult.extractedFields;
         } catch (error) {
