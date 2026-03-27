@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { inngest } from '@/lib/inngest/client';
+import { uuidSchema } from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +21,10 @@ export async function POST(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid document id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -35,7 +40,7 @@ export async function POST(
     const { data: document, error: docError } = await supabase
       .from('documents')
       .select('*')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -44,20 +49,21 @@ export async function POST(
     }
 
     // Update status to pending_ocr
-    await supabase
+    const { error: updateError } = await supabase
       .from('documents')
       .update({ status: 'pending_ocr' })
-      .eq('id', id);
+      .eq('id', idResult.data)
+      .eq('organization_id', user.organization_id);
+    if (updateError) {
+      return NextResponse.json({ error: 'Failed to queue document for processing' }, { status: 500 });
+    }
 
     // Trigger reprocessing via Inngest
     await inngest.send({
-      name: 'document/uploaded',
+      name: 'document/reprocess',
       data: {
         documentId: document.id,
         organizationId: user.organization_id,
-        fileUrl: document.file_url,
-        fileName: document.file_name,
-        mimeType: document.mime_type,
       },
     });
 

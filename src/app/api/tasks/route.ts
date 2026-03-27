@@ -1,6 +1,12 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  createTaskSchema,
+  parsePagination,
+  taskStatusSchema,
+  uuidSchema,
+} from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,8 +35,11 @@ export async function GET(request: NextRequest) {
     const clientId = searchParams.get('client_id');
     const status = searchParams.get('status');
     const assignedTo = searchParams.get('assigned_to');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const paginationResult = parsePagination(searchParams);
+    if (!paginationResult.success) {
+      return NextResponse.json({ error: paginationResult.error.issues[0]?.message || 'Invalid pagination values' }, { status: 400 });
+    }
+    const { limit, offset } = paginationResult.data;
 
     let query = supabase
       .from('tasks')
@@ -40,15 +49,27 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (clientId) {
-      query = query.eq('client_id', clientId);
+      const clientIdResult = uuidSchema.safeParse(clientId);
+      if (!clientIdResult.success) {
+        return NextResponse.json({ error: 'Invalid client_id filter' }, { status: 400 });
+      }
+      query = query.eq('client_id', clientIdResult.data);
     }
 
     if (status && status !== 'all') {
-      query = query.eq('status', status);
+      const statusResult = taskStatusSchema.safeParse(status);
+      if (!statusResult.success) {
+        return NextResponse.json({ error: 'Invalid status filter' }, { status: 400 });
+      }
+      query = query.eq('status', statusResult.data);
     }
 
     if (assignedTo) {
-      query = query.eq('assigned_to', assignedTo);
+      const assignedToResult = uuidSchema.safeParse(assignedTo);
+      if (!assignedToResult.success) {
+        return NextResponse.json({ error: 'Invalid assigned_to filter' }, { status: 400 });
+      }
+      query = query.eq('assigned_to', assignedToResult.data);
     }
 
     const { data: tasks, error, count } = await query;
@@ -89,11 +110,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { title, description, client_id, priority, assigned_to, due_date } = body;
-
-    if (!title) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    const parsedBody = createTaskSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
     }
+    const { title, description, client_id, priority, assigned_to, due_date } = parsedBody.data;
 
     const { data: task, error } = await supabase
       .from('tasks')

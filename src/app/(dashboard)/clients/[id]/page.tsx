@@ -29,7 +29,7 @@ import {
   Plus,
 } from 'lucide-react';
 import Link from 'next/link';
-import type { Client, Task } from '@/types/database';
+import type { Task } from '@/types/database';
 
 const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-800',

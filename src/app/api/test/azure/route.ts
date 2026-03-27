@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
-import { isOCRConfigured } from '@/lib/ocr/azure-document';
+import { auth } from '@clerk/nextjs/server';
 
 // GET /api/test/azure - Test Azure Document Intelligence connection
 export async function GET() {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Check if credentials are configured
     const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
     const key = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY;

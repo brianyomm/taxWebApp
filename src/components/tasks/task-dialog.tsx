@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useCreateTask, useUpdateTask } from '@/hooks/use-tasks';
 import {
   Dialog,
@@ -55,7 +55,7 @@ export function TaskDialog({ open, onOpenChange, task, clientId }: TaskDialogPro
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<CreateTaskInput & { status?: TaskStatus }>({
     defaultValues: {
@@ -101,8 +101,8 @@ export function TaskDialog({ open, onOpenChange, task, clientId }: TaskDialogPro
     }
   };
 
-  const priority = watch('priority');
-  const status = watch('status');
+  const priority = useWatch({ control, name: 'priority' });
+  const status = useWatch({ control, name: 'status' });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

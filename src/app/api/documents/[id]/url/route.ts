@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { uuidSchema } from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +20,10 @@ export async function GET(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid document id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -34,7 +39,7 @@ export async function GET(
     const { data: document, error: docError } = await supabase
       .from('documents')
       .select('*')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { updateDocumentSchema, uuidSchema } from '@/lib/validation/api';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +20,10 @@ export async function GET(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid document id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -33,7 +38,7 @@ export async function GET(
     const { data: document, error } = await supabase
       .from('documents')
       .select('*, client:clients(id, name), uploaded_by_user:users!documents_uploaded_by_fkey(id, name)')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -60,6 +65,10 @@ export async function PUT(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid document id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -75,7 +84,7 @@ export async function PUT(
     const { data: existingDoc } = await supabase
       .from('documents')
       .select('id')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -84,22 +93,20 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { status, category, subcategory, tax_year, notes } = body;
+    const parsedBody = updateDocumentSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
+    }
 
-    const updateData: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (status !== undefined) updateData.status = status;
-    if (category !== undefined) updateData.category = category;
-    if (subcategory !== undefined) updateData.subcategory = subcategory;
-    if (tax_year !== undefined) updateData.tax_year = tax_year;
-    if (notes !== undefined) updateData.notes = notes;
+    const updateData: Record<string, unknown> = Object.fromEntries(
+      Object.entries(parsedBody.data).filter(([, value]) => value !== undefined)
+    );
 
     const { data: document, error } = await supabase
       .from('documents')
       .update(updateData)
-      .eq('id', id)
+      .eq('id', idResult.data)
+      .eq('organization_id', user.organization_id)
       .select()
       .single();
 
@@ -114,7 +121,7 @@ export async function PUT(
       user_id: user.id,
       action: 'update',
       resource_type: 'document',
-      resource_id: id,
+      resource_id: idResult.data,
       details: updateData,
     });
 
@@ -137,6 +144,10 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const idResult = uuidSchema.safeParse(id);
+    if (!idResult.success) {
+      return NextResponse.json({ error: 'Invalid document id' }, { status: 400 });
+    }
 
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -152,7 +163,7 @@ export async function DELETE(
     const { data: document, error: docError } = await supabase
       .from('documents')
       .select('id, file_url, file_name')
-      .eq('id', id)
+      .eq('id', idResult.data)
       .eq('organization_id', user.organization_id)
       .single();
 
@@ -176,7 +187,8 @@ export async function DELETE(
     const { error } = await supabase
       .from('documents')
       .delete()
-      .eq('id', id);
+      .eq('id', idResult.data)
+      .eq('organization_id', user.organization_id);
 
     if (error) {
       console.error('Error deleting document:', error);
@@ -189,7 +201,7 @@ export async function DELETE(
       user_id: user.id,
       action: 'delete',
       resource_type: 'document',
-      resource_id: id,
+      resource_id: idResult.data,
       details: { file_name: document.file_name },
     });
 

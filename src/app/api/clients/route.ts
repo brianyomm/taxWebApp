@@ -1,6 +1,13 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  clientStatusSchema,
+  createClientSchema,
+  escapeLikeValue,
+  parsePagination,
+  parseSearchTerm,
+} from '@/lib/validation/api';
 
 // Use service role for API routes
 const supabase = createClient(
@@ -31,8 +38,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status');
     const search = searchParams.get('search');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const paginationResult = parsePagination(searchParams);
+    if (!paginationResult.success) {
+      return NextResponse.json({ error: paginationResult.error.issues[0]?.message || 'Invalid pagination values' }, { status: 400 });
+    }
+    const { limit, offset } = paginationResult.data;
 
     // Build query
     let query = supabase
@@ -43,11 +53,20 @@ export async function GET(request: NextRequest) {
       .range(offset, offset + limit - 1);
 
     if (status && status !== 'all') {
-      query = query.eq('status', status);
+      const statusResult = clientStatusSchema.safeParse(status);
+      if (!statusResult.success) {
+        return NextResponse.json({ error: 'Invalid status filter' }, { status: 400 });
+      }
+      query = query.eq('status', statusResult.data);
     }
 
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    const searchResult = parseSearchTerm(search);
+    if (!searchResult.success) {
+      return NextResponse.json({ error: searchResult.error }, { status: 400 });
+    }
+    if (searchResult.value) {
+      const escaped = escapeLikeValue(searchResult.value);
+      query = query.or(`name.ilike.%${escaped}%,email.ilike.%${escaped}%`);
     }
 
     const { data: clients, error, count } = await query;
@@ -89,11 +108,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, email, phone, address, tax_year, filing_status, assigned_to, notes } = body;
-
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    const parsedBody = createClientSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid request body' }, { status: 400 });
     }
+    const { name, email, phone, address, tax_year, filing_status, assigned_to, notes } = parsedBody.data;
 
     const { data: client, error } = await supabase
       .from('clients')

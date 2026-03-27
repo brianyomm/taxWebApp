@@ -17,7 +17,7 @@ export const processDocument = inngest.createFunction(
   },
   { event: 'document/uploaded' },
   async ({ event, step }) => {
-    const { documentId, organizationId, fileUrl, fileName, mimeType } = event.data;
+    const { documentId, organizationId, fileUrl, fileName } = event.data;
 
     // Step 1: Update document status to processing
     await step.run('update-status-processing', async () => {
@@ -29,25 +29,23 @@ export const processDocument = inngest.createFunction(
 
     // Step 2: Run OCR
     let ocrResult = null;
+    let ocrError: string | null = null;
     if (isOCRConfigured()) {
-      ocrResult = await step.run('run-ocr', async () => {
-        try {
-          // Get a signed URL for the document
-          const { data: signedUrlData } = await supabase.storage
+      try {
+        ocrResult = await step.run('run-ocr', async () => {
+          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
             .from('documents')
-            .createSignedUrl(fileUrl, 3600); // 1 hour expiry
+            .createSignedUrl(fileUrl, 3600);
 
-          if (!signedUrlData?.signedUrl) {
+          if (signedUrlError || !signedUrlData?.signedUrl) {
             throw new Error('Failed to get signed URL for document');
           }
 
-          const result = await analyzeDocument(signedUrlData.signedUrl);
-          return result;
-        } catch (error) {
-          console.error('OCR failed:', error);
-          return null;
-        }
-      });
+          return analyzeDocument(signedUrlData.signedUrl);
+        });
+      } catch (error) {
+        ocrError = error instanceof Error ? error.message : 'OCR failed';
+      }
     }
 
     // Build structured OCR data to pass to AI for better extraction
@@ -58,16 +56,15 @@ export const processDocument = inngest.createFunction(
 
     // Step 3: Run AI classification
     let classificationResult = null;
+    let classificationError: string | null = null;
     if (isAIConfigured() && ocrResult?.text) {
-      classificationResult = await step.run('classify-document', async () => {
-        try {
-          const result = await classifyDocument(ocrResult.text, structuredOCRData);
-          return result;
-        } catch (error) {
-          console.error('Classification failed:', error);
-          return null;
-        }
-      });
+      try {
+        classificationResult = await step.run('classify-document', async () => {
+          return classifyDocument(ocrResult.text, structuredOCRData);
+        });
+      } catch (error) {
+        classificationError = error instanceof Error ? error.message : 'Classification failed';
+      }
     }
 
     // Step 4: Extract detailed data if we have a specific form type
@@ -87,10 +84,18 @@ export const processDocument = inngest.createFunction(
       });
     }
 
+    const processingErrors: string[] = [];
+    if (isOCRConfigured() && !ocrResult) {
+      processingErrors.push(ocrError || 'OCR processing failed');
+    }
+    if (isAIConfigured() && ocrResult?.text && !classificationResult) {
+      processingErrors.push(classificationError || 'Document classification failed');
+    }
+
     // Step 5: Update document with results
-    const updateResult = await step.run('update-document', async () => {
+    await step.run('update-document', async () => {
       const updateData: Record<string, unknown> = {
-        status: 'pending_review',
+        status: processingErrors.length > 0 ? 'error' : 'pending_review',
         updated_at: new Date().toISOString(),
       };
 
@@ -116,6 +121,13 @@ export const processDocument = inngest.createFunction(
             keyValuePairCount: ocrResult.keyValuePairs.length,
           } : null,
           processedAt: new Date().toISOString(),
+        };
+      }
+      if (processingErrors.length > 0) {
+        updateData.extracted_data = {
+          ...((updateData.extracted_data as Record<string, unknown>) || {}),
+          processingErrors,
+          failedAt: new Date().toISOString(),
         };
       }
 
@@ -145,17 +157,19 @@ export const processDocument = inngest.createFunction(
           confidence: classificationResult?.confidence,
           ocrSuccess: !!ocrResult,
           classificationSuccess: !!classificationResult,
+          processingErrors,
         },
       });
     });
 
     return {
-      success: true,
+      success: processingErrors.length === 0,
       documentId,
       category: classificationResult?.category,
       subcategory: classificationResult?.subcategory,
       confidence: classificationResult?.confidence,
       ocrPageCount: ocrResult?.pages.length || 0,
+      errors: processingErrors,
     };
   }
 );

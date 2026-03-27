@@ -98,6 +98,7 @@ export interface Document {
   tax_year: number;
   ocr_text?: string;
   extracted_data?: Record<string, unknown>;
+  notes?: string;
   status: DocumentStatus;
   uploaded_by: string;
   verified_by?: string;
@@ -145,9 +146,8 @@ export interface ApiResponse<T> {
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
-  page: number;
   limit: number;
-  hasMore: boolean;
+  offset: number;
 }
 
 // Form Types
